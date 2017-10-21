@@ -1,0 +1,1071 @@
+import java.io.*;
+import java.util.*;
+ 
+public class Dijkstra {
+   private static final Graph.Edge[] GRAPH = {
+      new Graph.Edge("a", "b", 7),
+      new Graph.Edge("a", "c", 9),
+      new Graph.Edge("a", "f", 14),
+      new Graph.Edge("b", "c", 10),
+      new Graph.Edge("b", "d", 15),
+      new Graph.Edge("c", "d", 11),
+      new Graph.Edge("c", "f", 2),
+      new Graph.Edge("d", "e", 6),
+      new Graph.Edge("e", "f", 9),
+   };
+   private static final String START = "a";
+   private static final String END = "e";
+ 
+   public static void main(String[] args) {
+      Graph g = new Graph(GRAPH);
+      g.dijkstra(START);
+      g.printPath(END);
+      //g.printAllPaths();
+   }
+}
+ 
+class Graph {
+   private final Map<String, Vertex> graph; // mapping of vertex names to Vertex objects, built from a set of Edges
+ 
+   /** One edge of the graph (only used by Graph constructor) */
+   public static class Edge {
+      public final String v1, v2;
+      public final int dist;
+      public Edge(String v1, String v2, int dist) {
+         this.v1 = v1;
+         this.v2 = v2;
+         this.dist = dist;
+      }
+   }
+ 
+   /** One vertex of the graph, complete with mappings to neighbouring vertices */
+   public static class Vertex implements Comparable<Vertex> {
+      public final String name;
+      public int dist = Integer.MAX_VALUE; // MAX_VALUE assumed to be infinity
+      public Vertex previous = null;
+      public final Map<Vertex, Integer> neighbours = new HashMap<>();
+ 
+      public Vertex(String name) {
+         this.name = name;
+      }
+ 
+      private void printPath() {
+         if (this == this.previous) {
+            System.out.printf("%s", this.name);
+         } else if (this.previous == null) {
+            System.out.printf("%s(unreached)", this.name);
+         } else {
+            this.previous.printPath();
+            System.out.printf(" -> %s(%d)", this.name, this.dist);
+         }
+      }
+ 
+      public int compareTo(Vertex other) {
+         return Integer.compare(dist, other.dist);
+      }
+   }
+ 
+   /** Builds a graph from a set of edges */
+   public Graph(Edge[] edges) {
+      graph = new HashMap<>(edges.length);
+ 
+      //one pass to find all vertices
+      for (Edge e : edges) {
+         if (!graph.containsKey(e.v1)) graph.put(e.v1, new Vertex(e.v1));
+         if (!graph.containsKey(e.v2)) graph.put(e.v2, new Vertex(e.v2));
+      }
+ 
+      //another pass to set neighbouring vertices
+      for (Edge e : edges) {
+         graph.get(e.v1).neighbours.put(graph.get(e.v2), e.dist);
+         //graph.get(e.v2).neighbours.put(graph.get(e.v1), e.dist); // also do this for an undirected graph
+      }
+   }
+ 
+   /** Runs dijkstra using a specified source vertex */ 
+   public void dijkstra(String startName) {
+      if (!graph.containsKey(startName)) {
+         System.err.printf("Graph doesn't contain start vertex \"%s\"\n", startName);
+         return;
+      }
+      final Vertex source = graph.get(startName);
+      NavigableSet<Vertex> q = new TreeSet<>();
+ 
+      // set-up vertices
+      for (Vertex v : graph.values()) {
+         v.previous = v == source ? source : null;
+         v.dist = v == source ? 0 : Integer.MAX_VALUE;
+         q.add(v);
+      }
+ 
+      dijkstra(q);
+   }
+ 
+   /** Implementation of dijkstra's algorithm using a binary heap. */
+   private void dijkstra(final NavigableSet<Vertex> q) {      
+      Vertex u, v;
+      while (!q.isEmpty()) {
+ 
+         u = q.pollFirst(); // vertex with shortest distance (first iteration will return source)
+         if (u.dist == Integer.MAX_VALUE) break; // we can ignore u (and any other remaining vertices) since they are unreachable
+ 
+         //look at distances to each neighbour
+         for (Map.Entry<Vertex, Integer> a : u.neighbours.entrySet()) {
+            v = a.getKey(); //the neighbour in this iteration
+ 
+            final int alternateDist = u.dist + a.getValue();
+            if (alternateDist < v.dist) { // shorter path to neighbour found
+               q.remove(v);
+               v.dist = alternateDist;
+               v.previous = u;
+               q.add(v);
+            } 
+         }
+      }
+   }
+ 
+   /** Prints a path from the source to the specified vertex */
+   public void printPath(String endName) {
+      if (!graph.containsKey(endName)) {
+         System.err.printf("Graph doesn't contain end vertex \"%s\"\n", endName);
+         return;
+      }
+ 
+      graph.get(endName).printPath();
+      System.out.println();
+   }
+   /** Prints the path from the source to every vertex (output order is not guaranteed) */
+   public void printAllPaths() {
+      for (Vertex v : graph.values()) {
+         v.printPath();
+         System.out.println();
+      }
+   }
+}
+
+Output:
+
+
+a -> c(9) -> d(20) -> e(26)
+
+Mathematica
+
+This is beautiful, but incorrect. This solution is incorrect. Since the path is directed and f is only a sink, f cannot be in the middle of a path.
+
+bd = Graph[ {
+"a"\[UndirectedEdge] "b", "a"\[UndirectedEdge] "c", "b"\[UndirectedEdge] "c",
+"b"\[UndirectedEdge] "d", "c"\[UndirectedEdge] "d", "d"\[UndirectedEdge] "e",
+"a"\[UndirectedEdge] "f", "c"\[UndirectedEdge] "f", "e"\[UndirectedEdge] "f"
+} ,
+EdgeWeight->{7,9,10,15,11,6,14,2,9},VertexLabels->"Name",
+VertexLabelStyle->Directive[Black,20],ImagePadding->20]
+ 
+FindShortestPath[bd, "a", "e", Method -> "Dijkstra"]
+-> {"a", "c", "f", "e"}
+
+Mma dijkstra.PNG
+Maxima
+
+load(graphs)$
+g: create_graph([[1, "a"], [2, "b"], [3, "c"], [4, "d"], [5, "e"], [6, "f"]],
+   [[[1, 2], 7],
+    [[1, 3], 9],
+    [[1, 6], 14],
+    [[2, 3], 10],
+    [[2, 4], 15],
+    [[3, 4], 11],
+    [[3, 6], 2],
+    [[4, 5], 6],
+    [[5, 6], 9]], directed)$
+ 
+shortest_weighted_path(1, 5, g);
+/* [26, [1, 3, 4, 5]] */
+
+OCaml
+
+Just a straightforward implementation of the pseudo-code from the Wikipedia article:
+
+let list_vertices graph =
+  List.fold_left (fun acc ((a, b), _) ->
+    let acc = if List.mem b acc then acc else b::acc in
+    let acc = if List.mem a acc then acc else a::acc in
+    acc
+  ) [] graph
+ 
+let neighbors v =
+  List.fold_left (fun acc ((a, b), d) ->
+    if a = v then (b, d)::acc else acc
+  ) []
+ 
+let remove_from v lst =
+  let rec aux acc = function [] -> failwith "remove_from"
+  | x::xs -> if x = v then List.rev_append acc xs else aux (x::acc) xs
+  in aux [] lst
+ 
+let with_smallest_distance q dist =
+  match q with
+  | [] -> assert false
+  | x::xs ->
+      let rec aux distance v = function
+      | x::xs ->
+          let d = Hashtbl.find dist x in
+          if d < distance
+          then aux d x xs
+          else aux distance v xs
+      | [] -> (v, distance)
+      in
+      aux (Hashtbl.find dist x) x xs
+ 
+let dijkstra max_val zero add graph source target =
+  let vertices = list_vertices graph in
+  let dist_between u v =
+    try List.assoc (u, v) graph
+    with _ -> zero
+  in
+  let dist = Hashtbl.create 1 in
+  let previous = Hashtbl.create 1 in
+  List.iter (fun v ->                  (* initializations *)
+    Hashtbl.add dist v max_val         (* unknown distance function from source to v *)
+  ) vertices;
+  Hashtbl.replace dist source zero;    (* distance from source to source *)
+  let rec loop = function [] -> ()
+  | q ->
+      let u, dist_u =
+        with_smallest_distance q dist in   (* vertex in q with smallest distance in dist *)
+      if dist_u = max_val then
+        failwith "vertices inaccessible";  (* all remaining vertices are inaccessible from source *)
+      if u = target then () else begin
+        let q = remove_from u q in
+        List.iter (fun (v, d) ->
+          if List.mem v q then begin
+            let alt = add dist_u (dist_between u v) in
+            let dist_v = Hashtbl.find dist v in
+            if alt < dist_v then begin       (* relax (u,v,a) *)
+              Hashtbl.replace dist v alt;
+              Hashtbl.replace previous v u;  (* previous node in optimal path from source *)
+            end
+          end
+        ) (neighbors u graph);
+        loop q
+      end
+  in
+  loop vertices;
+  let s = ref [] in
+  let u = ref target in
+  while Hashtbl.mem previous !u do
+    s := !u :: !s;
+    u := Hashtbl.find previous !u
+  done;
+  (source :: !s)
+ 
+let () =
+  let graph =
+    [ ("a", "b"), 7;
+      ("a", "c"), 9;
+      ("a", "f"), 14;
+      ("b", "c"), 10;
+      ("b", "d"), 15;
+      ("c", "d"), 11;
+      ("c", "f"), 2;
+      ("d", "e"), 6;
+      ("e", "f"), 9; ]
+  in
+  let p = dijkstra max_int 0 (+) graph "a" "e" in
+  print_endline (String.concat " -> " p)
+
+Output:
+
+a -> c -> d -> e
+
+Translation of: C++
+
+Translation of the C++ solution, and all the complexities are the same as in the C++ solution. In particular, we again use a self-balancing binary search tree (Set) to implement the priority queue, which results in an optimal complexity.
+
+type vertex = int
+type weight = float
+type neighbor = vertex * weight
+module VertexSet = Set.Make(struct type t = weight * vertex let compare = compare end)
+ 
+let dijkstra (src:vertex) (adj_list:neighbor list array) : weight array * vertex array =
+  let n = Array.length adj_list in
+  let min_distance = Array.make n infinity in
+  min_distance.(src) <- 0.;
+  let previous = Array.make n (-1) in
+  let rec aux vertex_queue =
+    if not (VertexSet.is_empty vertex_queue) then
+      let dist, u = VertexSet.min_elt vertex_queue in
+      let vertex_queue' = VertexSet.remove (dist, u) vertex_queue in
+      let edges = adj_list.(u) in
+      let f vertex_queue (v, weight) =
+        let dist_thru_u = dist +. weight in
+        if dist_thru_u >= min_distance.(v) then
+          vertex_queue
+        else begin
+          let vertex_queue' = VertexSet.remove (min_distance.(v), v) vertex_queue in
+          min_distance.(v) <- dist_thru_u;
+          previous.(v) <- u;
+          VertexSet.add (min_distance.(v), v) vertex_queue'
+        end
+      in
+      aux (List.fold_left f vertex_queue' edges)
+  in
+  aux (VertexSet.singleton (min_distance.(src), src));
+  min_distance, previous
+ 
+let shortest_path_to (target : vertex) (previous : vertex array) : vertex list =
+  let rec aux target acc =
+    if target = -1 then
+      acc
+    else
+      aux previous.(target) (target :: acc)
+  in
+  aux target []
+ 
+let adj_list =
+  [| [(1, 7.); (2, 9.); (5, 14.)];           (* 0 = a *)
+     [(0, 7.); (2, 10.); (3, 15.)];          (* 1 = b *)
+     [(0, 9.); (1, 10.); (3, 11.); (5, 2.)]; (* 2 = c *)
+     [(1, 15.); (2, 11.); (4, 6.)];          (* 3 = d *)
+     [(3, 6.); (5, 9.)];                     (* 4 = e *)
+     [(0, 14.); (2, 2.); (4, 9.)]            (* 5 = f *)
+  |]
+ 
+let () =
+  let min_distance, previous = dijkstra 0 adj_list in
+  Printf.printf "Distance from 0 to 4: %f\n" min_distance.(4);
+  let path = shortest_path_to 4 previous in
+  print_string "Path: ";
+  List.iter (Printf.printf "%d, ") path;
+  print_newline ()
+
+PARI/GP
+
+Basic, inefficient implementation. Takes an n×n matrix representing distance between nodes (a 0-1 matrix if you just want to count number of steps) and a number in 1..n representing the starting node, which defaults to 1 if not given.
+
+shortestPath(G, startAt=1)={
+	my(n=#G[,1],dist=vector(n,i,9e99),prev=dist,Q=2^n-1);
+	dist[startAt]=0;
+	while(Q,
+		my(t=vecmin(vecextract(dist,Q)),u);
+		if(t==9e99, break);
+		for(i=1,#v,if(dist[i]==t && bittest(Q,i-1), u=i; break));
+		Q-=1<<(u-1);
+		for(i=1,n,
+			if(!G[u,i],next);
+			my(alt=dist[u]+G[u,i]);
+			if (alt < dist[i],
+				dist[i]=alt;
+				prev[i]=u;
+			)
+		)
+	);
+	dist
+};
+
+Perl 6
+
+ 
+class Graph {
+  has (%.edges, %.nodes);
+ 
+  method new(*@args){
+    my (%edges, %nodes);
+    for @args {
+      %edges{.[0]~.[1]} = $_;
+      %nodes{.[0]}.push(.[0]~.[1]);
+      %nodes{.[1]}.push(.[0]~.[1]);}
+    self.bless(edges => %edges, nodes => %nodes);}
+ 
+  method neighbours ($source){
+    my (%neighbours, $edges);
+    $edges = self.nodes{$source};
+    for @$edges -> $x{
+      for self.edges{$x}[0..1] -> $y{if $y ne $source {%neighbours{$y} = self.edges{$x}}}
+    }   
+    return %neighbours}
+ 
+  method dijkstra ($source, $dest) {
+    my (%node_data, $v, $u); my @q = self.nodes.keys;
+ 
+    for self.nodes.keys {%node_data{$_}{'dist'} = Inf;%node_data{$_}{'prev'} = '';}
+    %node_data{$source}{'dist'} = 0;
+ 
+    while @q {# %node_data.perl.say;
+      my ($mindist, $idx) = @((map {[%node_data{@q[$_]}{'dist'},$_]},^@q).min(*[0]));
+      $u = @q[$idx];
+ 
+      if $mindist eq Inf {return ()}
+ 
+      elsif $u eq $dest {
+	my @s; 
+	while %node_data{$u}{'prev'} {@s.unshift($u); $u = %node_data{$u}{'prev'}}
+	@s.unshift($source);
+	return @s;}
+ 
+      else {@q.splice($idx,1);}
+ 
+      for self.neighbours($u).kv -> $v, $edge{
+	my $alt = %node_data{$u}{'dist'} + $edge[2];
+	if $alt < %node_data{$v}{'dist'} {
+	  %node_data{$v}{'dist'} = $alt;
+	  %node_data{$v}{'prev'} = $u;}
+      }
+    }
+  }
+}
+ 
+my $a = Graph.new(["a", "b", 7],  ["a", "c", 9],  ["a", "f", 14], ["b", "c", 10],
+               ["b", "d", 15], ["c", "d", 11], ["c", "f", 2],  ["d", "e", 6],
+               ["e", "f", 9]).dijkstra('a', 'e').say;
+ 
+
+Output:
+
+a c f e
+
+PHP
+
+There are parts of this algorithm that could be optimized which have been marked TODO.
+
+ 
+<?php
+function dijkstra($graph_array, $source, $target) {
+    $vertices = array();
+    $neighbours = array();
+    foreach ($graph_array as $edge) {
+        array_push($vertices, $edge[0], $edge[1]);
+        $neighbours[$edge[0]][] = array("end" => $edge[1], "cost" => $edge[2]);
+        $neighbours[$edge[1]][] = array("end" => $edge[0], "cost" => $edge[2]);
+    }
+    $vertices = array_unique($vertices);
+ 
+    foreach ($vertices as $vertex) {
+        $dist[$vertex] = INF;
+        $previous[$vertex] = NULL;
+    }
+ 
+    $dist[$source] = 0;
+    $Q = $vertices;
+    while (count($Q) > 0) {
+ 
+        // TODO - Find faster way to get minimum
+        $min = INF;
+        foreach ($Q as $vertex){
+            if ($dist[$vertex] < $min) {
+                $min = $dist[$vertex];
+                $u = $vertex;
+            }
+        }
+ 
+        $Q = array_diff($Q, array($u));
+        if ($dist[$u] == INF or $u == $target) {
+            break;
+        }
+ 
+        if (isset($neighbours[$u])) {
+            foreach ($neighbours[$u] as $arr) {
+                $alt = $dist[$u] + $arr["cost"];
+                if ($alt < $dist[$arr["end"]]) {
+                    $dist[$arr["end"]] = $alt;
+                    $previous[$arr["end"]] = $u;
+                }
+            }
+        }
+    }
+    $path = array();
+    $u = $target;
+    while (isset($previous[$u])) {
+        array_unshift($path, $u);
+        $u = $previous[$u];
+    }
+    array_unshift($path, $u);
+    return $path;
+}
+ 
+$graph_array = array(
+                    array("a", "b", 7),
+                    array("a", "c", 9),
+                    array("a", "f", 14),
+                    array("b", "c", 10),
+                    array("b", "d", 15),
+                    array("c", "d", 11),
+                    array("c", "f", 2),
+                    array("d", "e", 6),
+                    array("e", "f", 9)
+               );
+ 
+$path = dijkstra($graph_array, "a", "e");
+ 
+echo "path is: ".implode(", ", $path)."\n";
+ 
+
+Output is:
+
+path is: a, c, f, e
+
+PicoLisp
+
+Following the Wikipedia algorithm:
+
+(de neighbor (X Y Cost)
+   (push (prop X 'neighbors) (cons Y Cost))
+   (push (prop Y 'neighbors) (cons X Cost)) )
+ 
+(de dijkstra (Curr Dest)
+   (let Cost 0
+      (until (== Curr Dest)
+         (let (Min T  Next)
+            (for N (; Curr neighbors)
+               (with (car N)
+                  (let D (+ Cost (cdr N))
+                     (unless (and (: distance) (>= D @))
+                        (=: distance D) ) )
+                  (when (> Min (: distance))
+                     (setq Min (: distance)  Next This) )
+                  (del (asoq Curr (: neighbors)) (:: neighbors)) ) )
+            (setq Curr Next  Cost Min) ) )
+      Cost ) )
+
+Test:
+
+(neighbor 'a 'b 7)
+(neighbor 'a 'c 9)
+(neighbor 'a 'f 14)
+(neighbor 'b 'c 10)
+(neighbor 'b 'd 15)
+(neighbor 'c 'd 11)
+(neighbor 'c 'f 2)
+(neighbor 'd 'e 6)
+(neighbor 'e 'f 9)
+ 
+(dijkstra 'a 'e)
+
+Output:
+
+-> 20
+
+Prolog
+
+An implementation of Dijkstra's algorithm in Prolog
+
+Dijkstra's algorithm starts with a set of all unvisited nodes, assigning an initial distance value for each as infinite. It then attempts to minimise the distance for each node from the origin.
+
+Starting at the origin (distance 0), the algorithm checks each neighbor's distance value and if larger than the current path distance, replaces the neighboring node's distance value. It then marks the current node as visited, and repeats the process for each of the neighbors. When the current node becomes the destination, the distance to the origin is known.
+
+This implementation is a slight variation on Dijkstra, which lends itself to Prolog's strengths while retaining approximate algorithmic equivalence.
+
+Prolog is not good at modifying memory in place, but is quite good at handling facts, pattern matching, recursion and backtracking to find all possible solutions.
+
+A dynamic database predicate, namely:
+
+    rpath([target|reversed_path], distance)   
+
+stores the currently known shortest distance and best path to a destination from the origin. Since the path is a reversed list, the first item in the list is the destination node, and the predicate is efficiently matched.
+
+Instead of using unvisited flags on nodes, we test whether neighbors are already in the traversed path. This achieves the same thing as 'visited' flags, but in a way that is more efficient for Prolog.
+
+After the graph traversal is complete, we are left with a single rpath/2 predicate for each reachable node, containing the shortest path and distance from the origin.
+
+Subtle differences
+
+1) Dijkstra visits each node only once, starting with the origin. This algorithm:
+
+   - arbitrarily selects a node (Qi) neighboring origin (o), and for that node
+   - if o->Qi is the shortest known path:
+       - update path and distance
+       - traverse Qi
+   - if o->Qi is not the shortest, select the next node.
+
+It is possible therefore, contrary to Dijkstra, that we may visit a node more than once whilst discovering a shorter path. It is also possible that the first path we choose is already the shortest eliminating processing.
+
+2) As traversal spreads outwards, the path is built as a list of traversed nodes.
+
+   - We use this list to ensure that we do not loop endlessly.
+   - This path is recorded as the shortest if the distance is indeed shorter than a known path.
+   - Leaf nodes in the traversal tree are processed completely before the origin node processing 
+     is completed. 
+     - This implies that the first stage in our algorithm involves allocating each node
+       in the traversal tree a path and 'shortest known distance from origin' value.
+     - ...Which is arguably better than assigning an initial 'infinite distance' value.
+
+We could possibly improve our algorithm by processing the neighbor with the shortest distance first, rather than an arbitrary selection as is currently the case. There is nothing though, to suggest that the eventual shortest path found would necessarily follow the shortest initial path, unless the target node is already the closest neighbor.
+
+
+%___________________________________________________________________________
+ 
+:-dynamic
+	rpath/2.      % A reversed path
+ 
+edge(a,b,7).
+edge(a,c,9).
+edge(b,c,10).
+edge(b,d,15).
+edge(c,d,11).
+edge(d,e,6).
+edge(a,f,14).
+edge(c,f,2).
+edge(e,f,9).
+ 
+path(From,To,Dist) :- edge(To,From,Dist).
+path(From,To,Dist) :- edge(From,To,Dist).
+ 
+shorterPath([H|Path], Dist) :-		       % path < stored path? replace it
+	rpath([H|T], D), !, Dist < D,          % match target node [H|_]
+	retract(rpath([H|_],_)),
+	writef('%w is closer than %w\n', [[H|Path], [H|T]]),
+	assert(rpath([H|Path], Dist)).
+shorterPath(Path, Dist) :-		       % Otherwise store a new path
+	writef('New path:%w\n', [Path]),
+	assert(rpath(Path,Dist)).
+ 
+traverse(From, Path, Dist) :-		    % traverse all reachable nodes
+	path(From, T, D),		    % For each neighbor
+	not(memberchk(T, Path)),	    %	which is unvisited
+	shorterPath([T,From|Path], Dist+D), %	Update shortest path and distance
+	traverse(T,[From|Path],Dist+D).	    %	Then traverse the neighbor
+ 
+traverse(From) :-
+	retractall(rpath(_,_)),           % Remove solutions
+	traverse(From,[],0).              % Traverse from origin
+traverse(_).
+ 
+go(From, To) :-
+	traverse(From),                   % Find all distances
+	rpath([To|RPath], Dist)->         % If the target was reached
+	  reverse([To|RPath], Path),      % Report the path and distance
+	  Distance is round(Dist),
+	  writef('Shortest path is %w with distance %w = %w\n',
+	       [Path, Dist, Distance]);
+	writef('There is no route from %w to %w\n', [From, To]).
+ 
+
+for example:
+
+?- go(a,e).
+New path:[b,a]
+New path:[c,b,a]
+New path:[d,c,b,a]
+New path:[e,d,c,b,a]
+New path:[f,e,d,c,b,a]
+[f,c,b,a] is closer than [f,e,d,c,b,a]
+[e,f,c,b,a] is closer than [e,d,c,b,a]
+[d,b,a] is closer than [d,c,b,a]
+[c,a] is closer than [c,b,a]
+[d,c,a] is closer than [d,b,a]
+[e,d,c,a] is closer than [e,f,c,b,a]
+[f,c,a] is closer than [f,c,b,a]
+[e,f,c,a] is closer than [e,d,c,a]
+Shortest path is [a,c,f,e] with distance 0+9+2+9 = 20
+true.
+
+Python
+
+Starts from the wp:Dijkstra's_algorithm#Pseudocode recognising that their function dist_between is what this task calls cost; and that their action decrease-key v in Q at their line 24 should be omitted if their Q is a set as stated in their line 9. The wp back-tracking pseudocode also misses a final insert of u at the beginning of S that must occur after exiting their while loop.
+
+Note: q could be changed to be a priority queue instead of a set as mentioned here.
+
+from collections import namedtuple
+from pprint import pprint as pp
+ 
+ 
+inf = float('inf')
+Edge = namedtuple('Edge', 'start, end, cost')
+ 
+class Graph():
+    def __init__(self, edges):
+        self.edges = edges2 = [Edge(*edge) for edge in edges]
+        self.vertices = set(sum(([e.start, e.end] for e in edges2), []))
+ 
+    def dijkstra(self, source, dest):
+        assert source in self.vertices
+        dist = {vertex: inf for vertex in self.vertices}
+        previous = {vertex: None for vertex in self.vertices}
+        dist[source] = 0
+        q = self.vertices.copy()
+        neighbours = {vertex: set() for vertex in self.vertices}
+        for start, end, cost in self.edges:
+            neighbours[start].add((end, cost))
+        #pp(neighbours)
+ 
+        while q:
+            u = min(q, key=lambda vertex: dist[vertex])
+            q.remove(u)
+            if dist[u] == inf or u == dest:
+                break
+            for v, cost in neighbours[u]:
+                alt = dist[u] + cost
+                if alt < dist[v]:                                  # Relax (u,v,a)
+                    dist[v] = alt
+                    previous[v] = u
+        #pp(previous)
+        s, u = [], dest
+        while previous[u]:
+            s.insert(0, u)
+            u = previous[u]
+        s.insert(0, u)
+        return s
+ 
+ 
+graph = Graph([("a", "b", 7),  ("a", "c", 9),  ("a", "f", 14), ("b", "c", 10),
+               ("b", "d", 15), ("c", "d", 11), ("c", "f", 2),  ("d", "e", 6),
+               ("e", "f", 9)])
+pp(graph.dijkstra("a", "e"))
+
+Output:
+
+['a', 'c', 'd', 'e']
+
+Racket
+
+ 
+#lang racket
+(require (planet jaymccarthy/dijkstra:1:2))
+ 
+(define edges
+  '([a . ((b 7)(c 9)(f 14))]
+    [b . ((c 10)(d 15))]
+    [c . ((d 11)(f 2))]
+    [d . ((e 6))]
+    [e . ((f 9))]))
+ 
+(define (node-edges n) 
+  (cond [(assoc n edges) => rest] ['()]))
+(define edge-weight second)
+(define edge-end first)
+ 
+(match/values (shortest-path node-edges edge-weight edge-end 'a (λ(n) (eq? n 'e)))
+ [(dists prevs)
+  (displayln (~a "Distances from a: " (for/list ([(n d) dists]) (list n d))))
+  (displayln (~a "Shortest path: "
+             (let loop ([path '(e)])
+               (cond [(eq? (first path) 'a) path]
+                     [(loop (cons (hash-ref prevs (first path)) path))]))))])
+ 
+
+Output:
+
+ 
+Distances from a: ((b 7) (d 20) (a 0) (c 9) (f 11) (e 26))
+Shortest path: (a c d e)
+ 
+
+REXX
+
+Some program features are:
+
+            elimination of null edges
+            elimination of duplications (the cheapest path is chosen)
+            a test for a no path found condition
+            use of memoization 
+
+/*REXX pgm finds the least costly path between 2 vertices  given a list.*/
+$.=copies(9,digits())                  /*edge cost:  this means ¬ exist.*/
+aList='!. @. $. beg fin bestP best$ xx yy'   /*common EXPOSEd variables.*/
+@abc='abcdefghijklmnopqrstuvwxyz'      /*list of all possible vertices. */
+verts=0;  edges=0                      /*number of  vertices and edges. */
+                        do jj=1  for length(@abc);     _=substr(@abc,jj,1)
+                        call value translate(_),jj;    @@.jj=_
+                        end   /*jj*/
+call def$  a  b   7                    /*define an edge  and  its cost. */
+call def$  a  c   9                    /*   "    "   "    "    "    "   */
+call def$  a  f  14                    /*   "    "   "    "    "    "   */
+call def$  b  c  10                    /*   "    "   "    "    "    "   */
+call def$  b  d  15                    /*   "    "   "    "    "    "   */
+call def$  c  d  11                    /*   "    "   "    "    "    "   */
+call def$  c  f   2                    /*   "    "   "    "    "    "   */
+call def$  d  e   6                    /*   "    "   "    "    "    "   */
+call def$  e  f   9                    /*   "    "   "    "    "    "   */
+beg=a;     fin=e                       /*the  BEGin & FINish  vertexes. */
+say;       say 'number of    edges = '   edges
+           say 'number of vertices = '   verts  "    ["left(@abc,verts)"]"
+best$=$.;  bestP=
+                    do jv=2  to verts;    call paths verts,jv;      end
+say
+if bestP==$.  then do; say 'no path found.';   exit;   end   /*oops-ay. */
+say 'best path =' translate(bestP,@abc,123456789) '          cost =' best$
+exit                                   /*stick a fork in it, we're done.*/
+/*──────────────────────────────────APATH subroutine────────────────────*/
+apath: parse arg pathx 1 p1 2 p2 3;       Lp=length(pathx);      $=$.p1.p2
+if $>=best$  then return
+pv=p2;                              do ka=3  to Lp;   _=substr(pathx,ka,1)
+                                    if $.pv._>=best$  then return
+                                    $=$+$.pv._;   if $>=best$  then return
+                                    pv=_
+                                    end   /*ka*/
+best$=$;   bestP=pathx
+return
+/*──────────────────────────────────DEF$ subroutine─────────────────────*/
+def$: parse arg xx yy $ .;   if $.xx.yy<$ & $.yy.xx<$ | xx==yy then return
+edges=edges+1;               verts=verts + ($.xx\==0) + ($.yy\==0)
+$.xx=0;   $.yy=0;            $.xx.yy=$;
+say  left('',40)   "cost of   "     @@.xx   '───►'   @@.yy   "   is "    $
+return
+/*──────────────────────────────────PATHS subroutine────────────────────*/
+paths: procedure expose (aList);    parse arg xx,yy,@.
+         do kp=1  for xx;    _=kp;    !.kp=_;  end    /*build path list.*/
+call .paths 1
+return
+/*──────────────────────────────────.PATHS subroutine───────────────────*/
+.paths: procedure expose (aList);   parse arg ?,_
+if ?>yy  then do
+              if @.1\==beg | @.yy\==fin  then return
+                do jj=1  for yy;  _=_||@.jj;  end;            call apath _
+              end
+         else do qq=1  for xx          /*build vertex paths recursively.*/
+                do kp=1  for ?-1;    if @.kp==!.qq  then iterate qq;   end
+              @.?=!.qq;  call .paths ?+1
+              end   /*qq*/
+return
+
+output when using the (internal) defaults:
+
+                                         cost of    a ───► b    is  7
+                                         cost of    a ───► c    is  9
+                                         cost of    a ───► f    is  14
+                                         cost of    b ───► c    is  10
+                                         cost of    b ───► d    is  15
+                                         cost of    c ───► d    is  11
+                                         cost of    c ───► f    is  2
+                                         cost of    d ───► e    is  6
+                                         cost of    e ───► f    is  9
+
+number of    edges =  9
+number of vertices =  6     [abcdef]
+
+best path = acde           cost = 26
+
+Ruby
+
+This solution is incorrect. Since the path is directed and f is only a sink, f cannot be in the middle of a path.
+Works with: Ruby version 1.9.2+
+(for INFINITY)
+
+Notes for this solution:
+
+    At every iteration, the next minimum distance node found by linear traversal of all nodes, which is inefficient. 
+
+class Graph
+  Vertex = Struct.new(:name, :neighbours, :dist, :prev)
+ 
+  def initialize(graph)
+    @vertices = Hash.new{|h,k| h[k]=Vertex.new(k,[],Float::INFINITY)}
+    @edges = {}
+    graph.each do |(v1, v2, dist)|
+      @vertices[v1].neighbours << v2
+      @vertices[v2].neighbours << v1
+      @edges[[v1, v2]] = @edges[[v2, v1]] = dist
+    end
+    @dijkstra_source = nil
+  end
+ 
+  def dijkstra(source)
+    return  if @dijkstra_source == source
+    q = @vertices.values
+    q.each do |v|
+      v.dist = Float::INFINITY
+      v.prev = nil
+    end
+    @vertices[source].dist = 0
+    until q.empty?
+      u = q.min_by {|vertex| vertex.dist}
+      break if u.dist == Float::INFINITY
+      q.delete(u)
+      u.neighbours.each do |v|
+        vv = @vertices[v]
+        if q.include?(vv)
+          alt = u.dist + @edges[[u.name, v]]
+          if alt < vv.dist
+            vv.dist = alt
+            vv.prev = u.name
+          end
+        end
+      end
+    end
+    @dijkstra_source = source
+  end
+ 
+  def shortest_path(source, target)
+    dijkstra(source)
+    path = []
+    u = target
+    while u
+      path.unshift(u)
+      u = @vertices[u].prev
+    end
+    return path, @vertices[target].dist
+  end
+ 
+  def to_s
+    "#<%s vertices=%p edges=%p>" % [self.class.name, @vertices.values, @edges] 
+  end
+end
+ 
+g = Graph.new([ [:a, :b, 7],
+                [:a, :c, 9],
+                [:a, :f, 14],
+                [:b, :c, 10],
+                [:b, :d, 15],
+                [:c, :d, 11],
+                [:c, :f, 2],
+                [:d, :e, 6],
+                [:e, :f, 9],
+              ])
+ 
+start, stop = :a, :e
+path, dist = g.shortest_path(start, stop)
+puts "shortest path from #{start} to #{stop} has cost #{dist}:"
+puts path.join(" -> ")
+
+Output:
+
+shortest path from a to e has cost 20:
+a -> c -> f -> e
+
+Scala
+
+A functional implementation of Dijkstras Algorithm:
+
+object Dijkstra {
+ 
+  type Path[Key] = (Double, List[Key])
+ 
+  def Dijkstra[Key](lookup: Map[Key, List[(Double, Key)]], fringe: List[Path[Key]], dest: Key, visited: Set[Key]): Path[Key] = fringe match {
+    case (dist, path) :: fringe_rest => path match {case key :: path_rest =>
+      if (key == dest) (dist, path.reverse)
+      else {
+        val paths = lookup(key).flatMap {case (d, key) => if (!visited.contains(key)) List((dist + d, key :: path)) else Nil}
+        val sorted_fringe = (paths ++ fringe_rest).sortWith {case ((d1, _), (d2, _)) => d1 < d2}
+        Dijkstra(lookup, sorted_fringe, dest, visited + key)
+      }
+    }
+    case Nil => (0, List())
+  }
+ 
+  def main(x: Array[String]): Unit = {
+    val lookup = Map(
+      "a" -> List((7.0, "b"), (9.0, "c"), (14.0, "f")),
+      "b" -> List((10.0, "c"), (15.0, "d")),
+      "c" -> List((11.0, "d"), (2.0, "f")),
+      "d" -> List((6.0, "e")),
+      "e" -> List((9.0, "f")),
+      "f" -> Nil
+    )
+    val res = Dijkstra[String](lookup, List((0, List("a"))), "e", Set())
+    println(res)
+  }
+}
+
+Output:
+
+(26.0,List(a, c, d, e))
+
+Tcl
+
+This solution is incorrect. Since the path is directed and f is only a sink, f cannot be in the middle of a path.
+
+Note that this code traverses the entire set of unrouted nodes at each step, as this is simpler than computing the subset that are reachable at each stage.
+
+proc dijkstra {graph origin} {
+    # Initialize
+    dict for {vertex distmap} $graph {
+	dict set dist $vertex Inf
+	dict set path $vertex {}
+    }
+    dict set dist $origin 0
+    dict set path $origin [list $origin]
+ 
+    while {[dict size $graph]} {
+	# Find unhandled node with least weight
+	set d Inf
+	dict for {uu -} $graph {
+	    if {$d > [set dd [dict get $dist $uu]]} {
+		set u $uu
+		set d $dd
+	    }
+	}
+ 
+	# No such node; graph must be disconnected
+	if {$d == Inf} break
+ 
+	# Update the weights for nodes lead to by the node we've picked
+	dict for {v dd} [dict get $graph $u] {
+	    if {[dict exists $graph $v]} {
+		set alt [expr {$d + $dd}]
+		if {$alt < [dict get $dist $v]} {
+		    dict set dist $v $alt
+		    dict set path $v [list {*}[dict get $path $u] $v]
+		}
+	    }
+	}
+ 
+	# Remove chosen node from graph still to be handled
+	dict unset graph $u
+    }
+    return [list $dist $path]
+}
+
+Showing the code in use:
+
+proc makeUndirectedGraph arcs {
+    # Assume that all nodes are connected to something
+    foreach arc $arcs {
+	lassign $arc v1 v2 cost
+	dict set graph $v1 $v2 $cost
+	dict set graph $v2 $v1 $cost
+    }
+    return $graph
+}
+set arcs {
+    {a b 7} {a c 9} {b c 10} {b d 15} {c d 11}
+    {d e 6} {a f 14} {c f 2} {e f 9}
+}
+lassign [dijkstra [makeUndirectedGraph $arcs] "a"] costs path
+puts "path from a to e costs [dict get $costs e]"
+puts "route from a to e is: [join [dict get $path e] { -> }]"
+
+Output:
+
+path from a to e costs 20
+route from a to e is: a -> c -> f -> e
+
+Categories:
+
+    Draft Programming Tasks
+    Classic CS problems
+    WikipediaSourced
+    ALGOL 68
+    AutoHotkey
+    C
+    C++
+    D
+    Go
+    Haskell
+    Icon
+    Unicon
+    J
+    Java
+    Mathematica
+    Maxima
+    OCaml
+    PARI/GP
+    Perl 6
+    PHP
+    PicoLisp
+    Prolog
+    Python
+    Racket
+    REXX
+    Ruby
+    Scala
+    Tcl
+
+    Create account
+    Log in
+
+    Page
+    Discussion
+
+    Read
+    Edit
+    View history
+
